@@ -1,0 +1,14 @@
+[Unit]
+Description=hyre-me FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/hyre-me/api
+EnvironmentFile=/var/www/hyre-me/api/.env
+ExecStart=/var/www/hyre-me/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
