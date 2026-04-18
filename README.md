@@ -27,14 +27,16 @@ gemini_api_key=YOUR_REAL_KEY
 
 ```bash
 .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 ## GitHub Actions 자동 배포
 
 워크플로우 파일: `.github/workflows/deploy.yml`
 
-`main` 브랜치에 push 될 때마다 자동 배포됩니다.
+`main` 브랜치에 push 될 때마다 서버의 `/var/www/hyre-me/api`로 코드 파일(`app`, `requirements.txt`)만 동기화합니다.
+
+`systemd`, `nginx`, TLS 인증서, 방화벽, 서비스 재시작은 **서버 관리자 사전 설정/운영 항목**이며 GitHub Actions에서 수행하지 않습니다.
 
 리포지토리 Secrets 설정값(예시):
 
@@ -53,13 +55,106 @@ sudo chown -R deploy:deploy /var/www/hyre-me
 
 ## systemd 서비스
 
-서비스 파일은 레포에서 관리합니다.
+서버 관리자 계정에서 user systemd 서비스를 직접 생성합니다.
 
-- `deploy/systemd/hyre-me-api.service`
-- 배포 시 `/etc/systemd/system/hyre-me-api.service`로 복사됨
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/hyre-me-api.service <<'EOF'
+[Unit]
+Description=hyre-me FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/hyre-me/api
+EnvironmentFile=-/var/www/hyre-me/api/.env
+ExecStart=/var/www/hyre-me/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+systemctl --user daemon-reload
+systemctl --user enable hyre-me-api
+systemctl --user restart hyre-me-api
+```
 
 상태 확인:
 
 ```bash
-sudo systemctl status hyre-me-api --no-pager
+systemctl --user status hyre-me-api --no-pager
+journalctl --user -u hyre-me-api -n 100 --no-pager
+```
+
+## Nginx 리버스 프록시
+
+도메인:
+
+- `hyre-me-api-test.pdj.kr`
+
+백엔드 업스트림:
+
+- `127.0.0.1:8001`
+
+아래 작업은 서버 관리자가 사전에 설정:
+
+```bash
+sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+sudo tee /etc/nginx/sites-available/hyre-me-api-test.conf > /dev/null <<'EOF'
+server {
+  listen 80;
+  listen [::]:80;
+  server_name hyre-me-api-test.pdj.kr;
+
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name hyre-me-api-test.pdj.kr;
+
+  ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+  ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_timeout 1d;
+  ssl_session_cache shared:SSL:10m;
+
+  client_max_body_size 20m;
+
+  location / {
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 60s;
+
+    proxy_pass http://127.0.0.1:8001;
+  }
+}
+EOF
+
+sudo ln -sfn /etc/nginx/sites-available/hyre-me-api-test.conf /etc/nginx/sites-enabled/hyre-me-api-test.conf
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Debian/Ubuntu는 보통 아래 snakeoil 인증서가 이미 존재함.
+# 없으면 임시 self-signed 인증서 생성.
+if [ ! -f /etc/ssl/certs/ssl-cert-snakeoil.pem ] || [ ! -f /etc/ssl/private/ssl-cert-snakeoil.key ]; then
+  sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -subj "/CN=hyre-me-api-test.pdj.kr" \
+    -keyout /etc/ssl/private/ssl-cert-snakeoil.key \
+    -out /etc/ssl/certs/ssl-cert-snakeoil.pem
+  sudo chmod 600 /etc/ssl/private/ssl-cert-snakeoil.key
+fi
+
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl restart nginx
+sudo systemctl status nginx --no-pager
 ```
