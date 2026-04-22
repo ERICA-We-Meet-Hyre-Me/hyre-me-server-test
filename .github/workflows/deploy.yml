@@ -35,6 +35,9 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           script: |
             set -e
+            # lingering 활성화 (한 번 설정됨)
+            sudo /bin/loginctl enable-linger deploy
+            
             cd /var/www/hyre-me/api
             /var/www/hyre-me/api/.venv/bin/pip install -r requirements.txt
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
