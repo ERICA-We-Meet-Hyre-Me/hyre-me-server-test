@@ -25,3 +25,19 @@ jobs:
           target: "/var/www/hyre-me/api"
           overwrite: true
           strip_components: 0
+
+      - name: Install dependencies and restart service
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            set -e
+            cd /var/www/hyre-me/api
+            /var/www/hyre-me/api/.venv/bin/pip install -r requirements.txt
+            export XDG_RUNTIME_DIR=/run/user/$(id -u)
+            systemctl --user daemon-reload
+            systemctl --user restart hyre-me-api
+            systemctl --user status hyre-me-api --no-pager
