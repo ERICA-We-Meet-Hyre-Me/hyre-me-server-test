@@ -26,21 +26,23 @@ jobs:
           overwrite: true
           strip_components: 0
 
-      - name: Install dependencies and restart service
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Restart FastAPI service
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
-            set -e
-            # lingering 활성화 (한 번 설정됨)
-            sudo /bin/loginctl enable-linger deploy
-            
+            # 1. API 디렉토리 이동
             cd /var/www/hyre-me/api
-            /var/www/hyre-me/api/.venv/bin/pip install -r requirements.txt
+            
+            # 2. 가상환경 활성화 및 패키지 설치
+            source .venv/bin/activate
+            pip install -r requirements.txt
+            
+            # 3. 사용자 레벨 systemd 서비스 재시작
+            # SSH 비대화형 환경에서 systemctl --user 명령어 에러(dbus 연결 실패)를 방지하기 위해 XDG_RUNTIME_DIR 설정 필수
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
-            systemctl --user daemon-reload
             systemctl --user restart hyre-me-api
-            systemctl --user status hyre-me-api --no-pager
+            systemctl --user status hyre-me-api
