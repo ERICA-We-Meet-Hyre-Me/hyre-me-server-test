@@ -14,3 +14,11 @@ def test_endpoint() -> dict[str, str]:
         "time": now,
         "message": "hello world!",
     }
+
+@router.get("/test2")
+def test_endpoint2() -> dict[str, str]:
+    now = datetime.now(timezone.utc).astimezone().isoformat()
+    return {
+        "time": now,
+        "message": "hello world!",
+    }
