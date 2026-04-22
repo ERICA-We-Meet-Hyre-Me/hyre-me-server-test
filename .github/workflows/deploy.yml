@@ -42,7 +42,10 @@ jobs:
             pip install -r requirements.txt
             
             # 3. 사용자 레벨 systemd 서비스 재시작
-            # SSH 비대화형 환경에서 systemctl --user 명령어 에러(dbus 연결 실패)를 방지하기 위해 XDG_RUNTIME_DIR 설정 필수
+            # SSH 비대화형 환경에서 D-Bus 연결을 위해 필요한 환경변수 설정
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+            
+            systemctl --user daemon-reload
             systemctl --user restart hyre-me-api
             systemctl --user status hyre-me-api
