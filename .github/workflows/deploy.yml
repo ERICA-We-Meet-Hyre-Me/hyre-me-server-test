@@ -7,6 +7,7 @@ on:
 
 jobs:
   deploy:
+    if: github.repository == 'ERICA-We-Meet-Hyre-Me/hyre-me-server-test'
     runs-on: ubuntu-latest
 
     steps:
