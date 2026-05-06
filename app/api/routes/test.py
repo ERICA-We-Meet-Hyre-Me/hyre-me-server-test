@@ -22,3 +22,9 @@ def test_endpoint2() -> dict[str, str]:
         "time": now,
         "message": "hello world!",
     }
+
+@router.get("/hello")
+def hello_endpoint(name: str) -> dict[str, str]:
+    return {
+        "message": f"hello, {name}!",
+    }
