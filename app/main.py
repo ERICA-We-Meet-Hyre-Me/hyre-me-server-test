@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.test import router as test_router
 from app.api.routes.menu import router as menu_router
+from app.api.routes.company import router as company_router
 
 app = FastAPI(title="hyre-me test api")
 
@@ -20,4 +21,5 @@ app.add_middleware(
 api = FastAPI()
 api.include_router(test_router)
 api.include_router(menu_router)
+api.include_router(company_router)
 app.mount("/api", api)
